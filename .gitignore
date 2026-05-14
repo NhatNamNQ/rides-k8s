@@ -1,0 +1,53 @@
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
+# Go
+bin/
+coverage.out
+*.test
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Docker/local data
+docker-compose.override.yml
+
+# Kubernetes local files
+*.kubeconfig
+kubeconfig
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl
+
+# Node/React, for later frontend stages
+node_modules/
+dist/
+build/
+.next/
+coverage/
+
