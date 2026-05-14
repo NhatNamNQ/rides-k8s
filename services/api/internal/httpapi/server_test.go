@@ -7,13 +7,15 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"rides-api/internal/metrics"
 	"rides-api/internal/ride"
 )
 
 func testServer() *Server {
-	return NewServer(ride.NewStore(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return NewServer(ride.NewStore(), slog.New(slog.NewTextHandler(io.Discard, nil)), metrics.New())
 }
 
 func TestHealthz(t *testing.T) {
@@ -106,5 +108,36 @@ func TestListRides(t *testing.T) {
 
 	if len(response.Rides) != 1 {
 		t.Fatalf("expected 1 ride, got %d", len(response.Rides))
+	}
+}
+
+func TestMetricsEndpoint(t *testing.T) {
+	server := testServer()
+
+	createReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/rides",
+		bytes.NewBufferString(`{"rider_id":"rider-1","pickup":"zone-a","dropoff":"zone-b"}`),
+	)
+	createRes := httptest.NewRecorder()
+	server.ServeHTTP(createRes, createReq)
+
+	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsRes := httptest.NewRecorder()
+	server.ServeHTTP(metricsRes, metricsReq)
+
+	if metricsRes.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, metricsRes.Code)
+	}
+
+	body := metricsRes.Body.String()
+	for _, expected := range []string{
+		"rides_created_total 1",
+		"rides_active 1",
+		`http_requests_total{method="POST",path="/api/rides",status="201"} 1`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected metrics response to contain %q, got:\n%s", expected, body)
+		}
 	}
 }

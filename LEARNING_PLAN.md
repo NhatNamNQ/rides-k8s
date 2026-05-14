@@ -954,11 +954,10 @@ In `docs/journal.md`, write:
 Date:
 Stage:
 What I built:
-What broke:
-How I fixed it:
 What I learned:
-Commands I used:
-Questions for next time:
+How I verified it:
+Problems and fixes:
+Beginner notes:
 ```
 
 This matters. The original Rides project stands out partly because the work was documented step by step. Documentation will also make the project useful as a portfolio artifact.

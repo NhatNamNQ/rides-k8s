@@ -7,6 +7,7 @@ import (
 
 	"rides-api/internal/config"
 	"rides-api/internal/httpapi"
+	"rides-api/internal/metrics"
 	"rides-api/internal/ride"
 )
 
@@ -16,7 +17,7 @@ func main() {
 		Level: parseLogLevel(cfg.LogLevel),
 	}))
 
-	server := httpapi.NewServer(ride.NewStore(), logger)
+	server := httpapi.NewServer(ride.NewStore(), logger, metrics.New())
 	addr := ":" + cfg.Port
 
 	logger.Info("rides API starting",

@@ -49,12 +49,12 @@ Use this template after every stage:
 ```text
 Date:
 Stage:
-What I built:
-Commands I used:
-What broke:
-How I fixed it:
-What I learned:
-Questions:
+Summary:
+What Changed:
+Concepts Learned:
+How I Verified It:
+Problems and Fixes:
+Beginner Notes:
 ```
 
 ### Checkpoint

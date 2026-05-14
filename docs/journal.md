@@ -2,146 +2,276 @@
 
 Use this file after every stage.
 
-## Stage 0: Plan the System
+The journal should explain the project in beginner-friendly language. It should not just list commands. Write down what changed, why it matters, what new concepts appeared, and what was verified.
+
+Recommended format:
+
+```text
+## Stage X: Stage Name
 
 Date:
 
-### What I Built
+### Summary
+
+Short explanation of what this stage added.
+
+### What Changed
+
+- Important change 1
+- Important change 2
+
+### Concepts Learned
+
+- Concept 1: beginner explanation
+- Concept 2: beginner explanation
+
+### How I Verified It
+
+- Test or manual check that proved the stage worked.
+
+### Problems and Fixes
+
+- Problem: what went wrong
+- Fix: how it was handled
+
+### Beginner Notes
+
+Extra explanation for future me.
+```
+
+## Stage 0: Plan the System
+
+Date: 2026-05-14
+
+### Summary
+
+This stage defined the project direction before writing application code. The project will be a small ridesharing simulation platform used to learn Go, Kubernetes, Prometheus, Grafana, Jenkins, AWS, and Terraform.
+
+The main decision was to keep the first version small. The project should start with a simple Go API, then gradually add storage, containers, Kubernetes, monitoring, CI/CD, AWS, and Terraform.
+
+### What Changed
 
 - Created the project learning plan.
 - Created the detailed stage guide.
-- Created agent rules.
-- Created review agent playbook.
-- Created initial architecture documentation.
+- Created agent rules for future coding sessions.
+- Created review agent rules for code, security, Kubernetes, observability, CI/CD, Terraform, and documentation.
+- Created the initial architecture document.
 
-### Commands I Used
+### Concepts Learned
 
-```bash
-mkdir -p docs services/api services/simulator services/web deploy/k8s deploy/docker-compose observability/prometheus observability/grafana infra/terraform
-```
+- **Architecture first**: before writing code, define the main services and how they communicate.
+- **Small stages**: learning is easier when every stage has a clear goal and finish line.
+- **Local before cloud**: the app should work locally before Docker, Kubernetes, or AWS are introduced.
+- **Manual before automation**: Jenkins and Terraform should automate workflows that already work manually.
+- **Security later, but not forgotten**: authentication ideas from `Go_Secure_Auth_Pro` are useful, but auth should not block the first Go API.
 
-### What Broke
+### How I Verified It
 
-- Nothing yet.
+- Confirmed the main project folders exist.
+- Confirmed `docs/architecture.md` explains the first version of the system.
+- Confirmed `AGENTS.md`, `REVIEW_AGENTS.md`, `LEARNING_PLAN.md`, and `STAGE_GUIDE.md` exist.
 
-### How I Fixed It
+### Problems and Fixes
 
-- Not applicable.
+- No technical problem yet. This was a planning stage.
 
-### What I Learned
+### Beginner Notes
 
-- The project should start with a small Go API before adding Kubernetes, Jenkins, AWS, or Terraform.
-- Minikube is the local Kubernetes target.
-- Prometheus and Grafana should be added after the API exposes useful metrics.
-- Jenkins should automate a manual process that already works.
-- Terraform should define AWS resources after those resources are understood manually.
-- Security/auth ideas from `Go_Secure_Auth_Pro` are useful, but should be added later.
-
-### Questions
-
-- Should the simulator start in Go for simplicity, or Node.js to match the original Rides project?
-- Should authentication be added after the core API works, or kept out of scope until the Kubernetes/AWS path is complete?
+The project is intentionally not starting with everything at once. Kubernetes, Jenkins, AWS, and Terraform are powerful, but they add many ways for things to fail. Starting with a small Go API makes future failures easier to understand.
 
 ## Stage 1: First Go HTTP API
 
 Date: 2026-05-14
 
-### What I Built
+### Summary
 
-- Created the first Go API in `services/api`.
-- Refactored the Go API into a small `cmd/` and `internal/` structure inspired by `golang-standards/project-layout`.
+This stage created the first working backend service. The API can respond to health checks, readiness checks, create rides, and list rides.
+
+The data is stored in memory for now. That means rides disappear when the API process stops. This is acceptable for Stage 1 because the goal is to learn the HTTP flow before adding PostgreSQL.
+
+### What Changed
+
+- Created the Go module in `services/api`.
+- Created the API entrypoint at `services/api/cmd/rides-api/main.go`.
+- Created HTTP server code in `services/api/internal/httpapi`.
+- Created ride storage code in `services/api/internal/ride`.
 - Added an in-memory ride store.
-- Added health and readiness endpoints.
-- Added endpoints to create and list rides.
-- Added focused unit tests for health, readiness, ride creation, validation, and ride listing.
+- Added these endpoints:
+  - `GET /healthz`
+  - `GET /readyz`
+  - `GET /api/rides`
+  - `POST /api/rides`
+- Added tests for health, readiness, ride creation, validation, and ride listing.
 
-### Commands I Used
+### Concepts Learned
 
-```bash
-cd services/api
-go mod init rides-api
-gofmt -w cmd/rides-api/main.go internal/httpapi/server.go internal/httpapi/server_test.go internal/ride/store.go
-go test ./...
-go run ./cmd/rides-api
-curl -s -i http://127.0.0.1:8080/healthz
-curl -s -i http://127.0.0.1:8080/readyz
-curl -s -i http://127.0.0.1:8080/api/rides
-curl -s -i -X POST http://127.0.0.1:8080/api/rides \
-  -H 'Content-Type: application/json' \
-  -d '{"rider_id":"rider-1","pickup":"zone-a","dropoff":"zone-b"}'
+- **Go module**: a Go project is usually managed with `go.mod`.
+- **`cmd/` folder**: contains executable entrypoints. In this project, `cmd/rides-api/main.go` starts the API.
+- **`internal/` folder**: contains private application code that should not be imported by other Go modules.
+- **HTTP handler**: a function that receives a request and writes a response.
+- **`http.ResponseWriter`**: used to write the HTTP response.
+- **`*http.Request`**: contains information about the incoming request.
+- **In-memory store**: temporary storage inside the running process.
+- **Mutex**: protects shared memory when multiple requests happen at the same time.
+- **Unit test**: code that verifies behavior automatically.
+
+### How I Verified It
+
+- Ran the Go test suite successfully.
+- Started the API locally.
+- Verified `GET /healthz` returned `200 OK`.
+- Verified `GET /readyz` returned `200 OK`.
+- Verified `GET /api/rides` returned a JSON list.
+- Verified `POST /api/rides` created a ride and returned `201 Created`.
+
+### Problems and Fixes
+
+- Problem: Go tests initially could not write to the Go build cache because the cache is outside the workspace sandbox.
+- Fix: reran tests with permission to use the Go build cache.
+- Problem: `curl` from the default sandbox could not reach the API process started in another execution context.
+- Fix: ran endpoint verification in the same execution context as the API process.
+
+### Beginner Notes
+
+The `Store` type is acting like a tiny database for now:
+
+```text
+POST /api/rides -> validate request -> Store.Create -> save ride in memory
+GET /api/rides  -> Store.List -> return all rides
 ```
 
-### What Broke
-
-- `go test ./...` initially failed because the Go build cache is outside the workspace sandbox.
-- `curl` from the default sandbox could not reach the API process started with elevated execution.
-
-### How I Fixed It
-
-- Reran `go test ./...` with permission to use the Go build cache.
-- Ran endpoint verification in the same execution context as the local API process.
-
-### What I Learned
-
-- The first API can stay simple with Go's standard `net/http` package.
-- `GET /healthz` should confirm the process is alive.
-- `GET /readyz` currently returns ready, but later it should check PostgreSQL.
-- The ride store is intentionally in-memory for Stage 1.
-- Unit tests give a stable base before adding config, metrics, and PostgreSQL.
-
-### Questions
-
-- Should Stage 2 keep using only the standard library for logging, or introduce structured logging with `slog`?
-- Should ride IDs stay simple strings until PostgreSQL, or move to UUIDs before persistence?
+This is not the final design. Later, PostgreSQL will store the rides. Starting with memory keeps the first API easy to understand.
 
 ## Stage 2: Configuration and Logging
 
 Date: 2026-05-14
 
-### What I Built
+### Summary
 
-- Added `internal/config` for environment-based configuration.
+This stage made the API more realistic by adding environment-based configuration and structured logs.
+
+Before this stage, the API always listened on port `8080`. Now the port can be changed with `PORT`. The API also reads `LOG_LEVEL` and `DATABASE_URL`.
+
+### What Changed
+
+- Added `services/api/internal/config`.
 - Added support for:
   - `PORT`
   - `LOG_LEVEL`
   - `DATABASE_URL`
-- Switched the API startup logs to structured JSON logs with `log/slog`.
-- Added request logging for method, path, status, and duration.
-- Added ride creation logs.
-- Added tests for config defaults and environment overrides.
+- Switched startup logs to Go's `log/slog`.
+- Added JSON-formatted logs.
+- Added one log for every HTTP request.
+- Added a log when a ride is created.
+- Added tests for config defaults and environment variable overrides.
 
-### Commands I Used
+### Concepts Learned
 
-```bash
-cd services/api
-gofmt -w cmd/rides-api/main.go internal/config/config.go internal/config/config_test.go internal/httpapi/server.go internal/httpapi/server_test.go
-go test ./...
-PORT=9090 LOG_LEVEL=debug DATABASE_URL=postgres://example go run ./cmd/rides-api
-curl -s -i http://127.0.0.1:9090/healthz
-curl -s -i -X POST http://127.0.0.1:9090/api/rides \
-  -H 'Content-Type: application/json' \
-  -d '{"rider_id":"rider-2","pickup":"zone-c","dropoff":"zone-d"}'
+- **Environment variable**: configuration passed to the process from outside the code.
+- **Default value**: value used when an environment variable is not set.
+- **Structured logging**: logs written as key-value data instead of plain text.
+- **JSON logs**: useful later because Docker, Kubernetes, and log tools can parse them.
+- **Request log**: records method, path, status code, and duration for each HTTP request.
+- **Startup log**: confirms how the service started and which config was detected.
+
+### How I Verified It
+
+- Ran the Go test suite successfully.
+- Started the API with a custom port:
+
+```text
+PORT=9090
+LOG_LEVEL=debug
+DATABASE_URL=postgres://example
 ```
 
-### What Broke
+- Verified the API listened on `9090`.
+- Verified `GET /healthz` worked on the custom port.
+- Verified `POST /api/rides` created a ride.
+- Confirmed JSON logs appeared for startup, request handling, and ride creation.
 
-- Nothing in the application code.
-- Local verification still needed elevated execution because Go writes to its build cache outside the workspace and the test API process was started in that same execution context.
+### Problems and Fixes
 
-### How I Fixed It
+- No application bug was found.
+- The same local sandbox limitation from Stage 1 applied when running Go and checking local endpoints.
 
-- Ran tests and manual endpoint checks with the required execution permission.
-- Stopped the temporary API process after verification.
+### Beginner Notes
 
-### What I Learned
+Hardcoding configuration is a bad habit for services that will run in Docker or Kubernetes. In Kubernetes, values like port, database URL, and log level usually come from ConfigMaps, Secrets, or environment variables.
 
-- `PORT` lets the service run on a configurable address instead of hardcoding `:8080`.
-- `LOG_LEVEL` controls how verbose structured logs should be.
-- `DATABASE_URL` is loaded now but will not be used until the PostgreSQL stage.
-- `slog` gives structured logs that are easier to search in Docker and Kubernetes.
-- Request logs are useful later for debugging failures in Minikube.
+`DATABASE_URL` is loaded now but not used yet. It will become important in the PostgreSQL stage.
 
-### Questions
+## Stage 3: Prometheus Metrics in Go
 
-- Should invalid `LOG_LEVEL` values fail startup, or default to `info`?
-- Should request logs include remote address and user agent in a later stage?
+Date: 2026-05-14
+
+### Summary
+
+This stage added Prometheus metrics to the Go API. The API now exposes a `GET /metrics` endpoint that Prometheus can scrape later.
+
+Metrics are different from logs. Logs explain individual events. Metrics show numeric system behavior over time, such as request count, request duration, and number of active rides.
+
+### What Changed
+
+- Added the Prometheus Go client dependency.
+- Added `services/api/internal/metrics`.
+- Added `GET /metrics`.
+- Added HTTP request metrics:
+  - `http_requests_total`
+  - `http_request_duration_seconds`
+- Added ride metrics:
+  - `rides_created_total`
+  - `rides_active`
+- Updated the HTTP server to record request count, status code, route path, and duration.
+- Updated ride creation to increment ride metrics.
+- Added a test that verifies the metrics endpoint exposes expected values.
+
+### Concepts Learned
+
+- **Prometheus**: a monitoring system that collects metrics by scraping HTTP endpoints.
+- **`/metrics` endpoint**: an HTTP endpoint that returns metrics in Prometheus text format.
+- **Counter**: a metric that only goes up, such as `rides_created_total`.
+- **Gauge**: a metric that can go up or down, such as `rides_active`.
+- **Histogram**: a metric that groups values into buckets, useful for request duration.
+- **Label**: extra information attached to a metric, such as method, path, and status.
+- **Scraping**: Prometheus pulls metrics from the service instead of the service pushing metrics to Prometheus.
+
+### How I Verified It
+
+- Ran the Go test suite successfully.
+- Started the API locally on port `9090`.
+- Opened `GET /metrics`.
+- Created a ride with `POST /api/rides`.
+- Confirmed the metrics output included:
+  - `rides_created_total 1`
+  - `rides_active 1`
+  - `http_requests_total{method="POST",path="/api/rides",status="201"} 1`
+
+### Problems and Fixes
+
+- Problem: adding the Prometheus dependency initially failed because the sandbox could not resolve `proxy.golang.org`.
+- Fix: reran the dependency download with network permission.
+- Problem: Go commands still needed access to the Go build cache outside the workspace.
+- Fix: ran tests with the required permission.
+
+### Beginner Notes
+
+The API now has two kinds of observability:
+
+```text
+Logs    -> event details, useful for debugging one request
+Metrics -> numbers over time, useful for dashboards and alerts
+```
+
+Example:
+
+```text
+POST /api/rides
+  -> creates a ride
+  -> logs "ride created"
+  -> increments rides_created_total
+  -> increments rides_active
+  -> records HTTP request duration
+```
+
+This prepares the project for the later Prometheus and Grafana stages. Prometheus will scrape `GET /metrics`, and Grafana will visualize those values.
