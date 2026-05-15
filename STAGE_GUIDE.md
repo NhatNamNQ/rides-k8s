@@ -227,7 +227,38 @@ Persist data instead of keeping it in memory.
 
 ### Tasks
 
-1. Start PostgreSQL locally or with Docker:
+1. Choose where PostgreSQL runs.
+
+For this project, use Supabase free tier if Docker image downloads are too slow.
+
+Recommended for Supabase:
+
+- Create a Supabase project.
+- Open the project dashboard.
+- Click **Connect**.
+- Copy the **Session pooler** connection string first.
+- Add `sslmode=require` if it is not already present.
+- Store it locally as `DATABASE_URL`.
+
+Why Session pooler:
+
+- this Go API is a long-running backend service
+- Supabase direct connections often require IPv6
+- Session pooler supports IPv4 and IPv6
+
+Avoid Transaction pooler for now because it can require extra driver settings around prepared statements.
+
+If your network cannot reach port `5432`, use the Supabase pooler on port `6543` instead:
+
+```text
+postgresql://postgres.PROJECT_REF:YOUR_PASSWORD@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?sslmode=require&default_query_exec_mode=simple_protocol
+```
+
+Use `default_query_exec_mode=simple_protocol` with the Go `pgx` driver when using the transaction pooler.
+
+For `psql`, remove `default_query_exec_mode=simple_protocol` because `psql` does not understand that parameter.
+
+2. Optional local Docker PostgreSQL:
 
 ```bash
 docker run --name rides-postgres \
@@ -238,7 +269,7 @@ docker run --name rides-postgres \
   -d postgres:16
 ```
 
-2. Add schema file:
+3. Add schema file:
 
 ```text
 services/api/migrations/001_init.sql
@@ -247,8 +278,10 @@ services/api/migrations/001_init.sql
 Start with:
 
 ```sql
-CREATE TABLE rides (
-  id UUID PRIMARY KEY,
+CREATE SEQUENCE IF NOT EXISTS rides_id_seq;
+
+CREATE TABLE IF NOT EXISTS rides (
+  id TEXT PRIMARY KEY DEFAULT ('ride-' || nextval('rides_id_seq')::TEXT),
   rider_id TEXT NOT NULL,
   pickup TEXT NOT NULL,
   dropoff TEXT NOT NULL,
@@ -257,9 +290,24 @@ CREATE TABLE rides (
 );
 ```
 
-3. Connect from Go using `DATABASE_URL`.
+4. Apply the migration.
 
-4. Make `/readyz` check database connectivity.
+For Supabase, use the dashboard SQL Editor:
+
+- open SQL Editor
+- paste `services/api/migrations/001_init.sql`
+- run the SQL
+
+5. Connect from Go using `DATABASE_URL`.
+
+Example:
+
+```bash
+cd services/api
+DATABASE_URL='postgres://postgres.PROJECT_REF:YOUR_PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require&default_query_exec_mode=simple_protocol' go run ./cmd/rides-api
+```
+
+6. Make `/readyz` check database connectivity.
 
 ### Learn
 
@@ -273,7 +321,10 @@ Focus on:
 
 ### Checkpoint
 
-Rides survive an API restart.
+- The API starts with `DATABASE_URL`.
+- `/readyz` returns ready when Supabase is reachable.
+- Created rides are stored in Supabase.
+- Rides survive an API restart.
 
 ## Stage 5: Docker Compose
 

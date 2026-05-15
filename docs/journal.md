@@ -275,3 +275,95 @@ POST /api/rides
 ```
 
 This prepares the project for the later Prometheus and Grafana stages. Prometheus will scrape `GET /metrics`, and Grafana will visualize those values.
+
+## Stage 4: PostgreSQL with Supabase
+
+Date: 2026-05-15
+
+### Summary
+
+This stage started moving ride storage from memory to PostgreSQL. Instead of using a local Docker Postgres container, the project will use Supabase free tier for the database.
+
+The code now supports two storage modes:
+
+```text
+No DATABASE_URL -> use in-memory storage
+DATABASE_URL set -> connect to PostgreSQL
+```
+
+This keeps local development easy while allowing real persistence when a Supabase database is configured.
+
+### What Changed
+
+- Added PostgreSQL driver support with `pgx`.
+- Added a `ride.Repository` interface so the HTTP API does not depend directly on memory storage.
+- Renamed the old memory store to `MemoryStore`.
+- Added `PostgresStore` for real PostgreSQL persistence.
+- Added `services/api/migrations/001_init.sql`.
+- Updated `/readyz` so it checks storage availability.
+- Added a test for readiness failure when storage is unavailable.
+- Added `services/api/.env.example` with a safe Supabase connection string template.
+
+### Concepts Learned
+
+- **Repository interface**: lets the API use different storage implementations without changing handlers.
+- **Memory store**: useful for tests and early local development.
+- **Postgres store**: stores data in a real database so it survives process restarts.
+- **Migration**: SQL file that creates or changes database tables.
+- **Readiness check**: should verify dependencies like the database.
+- **Supabase Session pooler**: recommended for this long-running Go API, especially when direct IPv6 connections are not available.
+- **Supabase Transaction pooler**: useful fallback when the local network cannot reach port `5432`; it uses port `6543`.
+- **`default_query_exec_mode=simple_protocol`**: pgx setting needed for compatibility with Supabase transaction pooler.
+
+### How I Verified It
+
+- Ran the Go test suite successfully.
+- Confirmed the API still works with the in-memory store when `DATABASE_URL` is not set.
+- Confirmed `/readyz` can return `503 Service Unavailable` when the storage dependency fails.
+- Tested Supabase network reachability:
+  - port `5432` failed from the current network
+  - port `6543` succeeded
+- Verified `psql` can connect to Supabase through port `6543`.
+- Verified the Go API can connect to Supabase using port `6543` plus `default_query_exec_mode=simple_protocol`.
+- Verified:
+  - `GET /readyz` returned `200 OK`
+  - `GET /api/rides` returned `200 OK`
+
+### Problems and Fixes
+
+- Problem: Docker tried to download the `postgres:16` image, but the network was weak.
+- Fix: stopped the Docker download and switched the Stage 4 plan to Supabase free tier.
+- Problem: Supabase pooler port `5432` timed out from the current network.
+- Fix: used Supabase pooler port `6543`.
+- Problem: the Go `pgx` driver needs extra compatibility settings for the transaction pooler.
+- Fix: added `default_query_exec_mode=simple_protocol` to the Go API connection string.
+
+### Beginner Notes
+
+The most important design change is this:
+
+```text
+HTTP handlers depend on ride.Repository
+MemoryStore implements ride.Repository
+PostgresStore implements ride.Repository
+```
+
+That means the API handlers do not care where rides are stored. They call:
+
+```text
+Create
+List
+Ping
+```
+
+The actual storage can be memory or PostgreSQL.
+
+For Supabase, prefer the Session pooler if port `5432` works. On this network, port `5432` was unreachable, so the project uses the pooler on port `6543` instead.
+
+Use this shape for the Go API:
+
+```text
+postgresql://USER:PASSWORD@HOST:6543/postgres?sslmode=require&default_query_exec_mode=simple_protocol
+```
+
+Do not commit the real connection string because it contains the database password.

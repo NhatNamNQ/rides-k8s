@@ -1,6 +1,7 @@
 package ride
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
@@ -23,20 +24,26 @@ type CreateRequest struct {
 	Dropoff string `json:"dropoff"`
 }
 
-type Store struct {
+type Repository interface {
+	Create(ctx context.Context, req CreateRequest) (Ride, error)
+	List(ctx context.Context) ([]Ride, error)
+	Ping(ctx context.Context) error
+}
+
+type MemoryStore struct {
 	mu     sync.RWMutex
 	rides  []Ride
 	nextID int
 }
 
-func NewStore() *Store {
-	return &Store{
+func NewMemoryStore() *MemoryStore {
+	return &MemoryStore{
 		rides:  make([]Ride, 0),
 		nextID: 1,
 	}
 }
 
-func (s *Store) Create(req CreateRequest) Ride {
+func (s *MemoryStore) Create(ctx context.Context, req CreateRequest) (Ride, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -52,17 +59,21 @@ func (s *Store) Create(req CreateRequest) Ride {
 	s.nextID++
 	s.rides = append(s.rides, r)
 
-	return r
+	return r, nil
 }
 
-func (s *Store) List() []Ride {
+func (s *MemoryStore) List(ctx context.Context) ([]Ride, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	rides := make([]Ride, len(s.rides))
 	copy(rides, s.rides)
 
-	return rides
+	return rides, nil
+}
+
+func (s *MemoryStore) Ping(ctx context.Context) error {
+	return nil
 }
 
 func ValidateCreateRequest(req CreateRequest) error {

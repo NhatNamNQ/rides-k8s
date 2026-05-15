@@ -2,7 +2,9 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -15,7 +17,7 @@ import (
 )
 
 func testServer() *Server {
-	return NewServer(ride.NewStore(), slog.New(slog.NewTextHandler(io.Discard, nil)), metrics.New())
+	return NewServer(ride.NewMemoryStore(), slog.New(slog.NewTextHandler(io.Discard, nil)), metrics.New())
 }
 
 func TestHealthz(t *testing.T) {
@@ -39,6 +41,22 @@ func TestReadyz(t *testing.T) {
 
 	if res.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, res.Code)
+	}
+}
+
+func TestReadyzWhenStoreIsUnavailable(t *testing.T) {
+	server := NewServer(
+		failingStore{},
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		metrics.New(),
+	)
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	res := httptest.NewRecorder()
+
+	server.ServeHTTP(res, req)
+
+	if res.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, res.Code)
 	}
 }
 
@@ -140,4 +158,18 @@ func TestMetricsEndpoint(t *testing.T) {
 			t.Fatalf("expected metrics response to contain %q, got:\n%s", expected, body)
 		}
 	}
+}
+
+type failingStore struct{}
+
+func (failingStore) Create(ctx context.Context, req ride.CreateRequest) (ride.Ride, error) {
+	return ride.Ride{}, errors.New("store unavailable")
+}
+
+func (failingStore) List(ctx context.Context) ([]ride.Ride, error) {
+	return nil, errors.New("store unavailable")
+}
+
+func (failingStore) Ping(ctx context.Context) error {
+	return errors.New("store unavailable")
 }

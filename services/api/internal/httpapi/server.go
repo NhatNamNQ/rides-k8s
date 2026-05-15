@@ -11,13 +11,13 @@ import (
 )
 
 type Server struct {
-	store   *ride.Store
+	store   ride.Repository
 	logger  *slog.Logger
 	metrics *metrics.Metrics
 	mux     *http.ServeMux
 }
 
-func NewServer(store *ride.Store, logger *slog.Logger, metrics *metrics.Metrics) *Server {
+func NewServer(store ride.Repository, logger *slog.Logger, metrics *metrics.Metrics) *Server {
 	s := &Server{
 		store:   store,
 		logger:  logger,
@@ -63,11 +63,24 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.Ping(r.Context()); err != nil {
+		s.logger.Error("readiness check failed", "error", err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "not_ready"})
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }
 
 func (s *Server) handleListRides(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"rides": s.store.List()})
+	rides, err := s.store.List(r.Context())
+	if err != nil {
+		s.logger.Error("failed to list rides", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to list rides")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"rides": rides})
 }
 
 func (s *Server) handleCreateRide(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +97,13 @@ func (s *Server) handleCreateRide(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created := s.store.Create(req)
+	created, err := s.store.Create(r.Context(), req)
+	if err != nil {
+		s.logger.Error("failed to create ride", "error", err)
+		writeError(w, http.StatusInternalServerError, "failed to create ride")
+		return
+	}
+
 	s.metrics.ObserveRideCreated()
 	s.logger.Info("ride created",
 		"ride_id", created.ID,
