@@ -10,10 +10,10 @@ import (
 
 type Metrics struct {
 	registry            *prometheus.Registry
-	httpRequestsTotal   *prometheus.CounterVec
-	httpRequestDuration *prometheus.HistogramVec
-	ridesCreatedTotal   prometheus.Counter
-	ridesActive         prometheus.Gauge
+	httpRequestsTotal   *prometheus.CounterVec // CounterVec is used to track the total number of requests, with labels for method, path, and status
+	httpRequestDuration *prometheus.HistogramVec // Histogram is used to track the speed of requests
+	ridesCreatedTotal   prometheus.Counter // just only increment when a ride is created
+	ridesActive         prometheus.Gauge // increment when a ride is created, decrement when a ride is completed
 }
 
 func New() *Metrics {
@@ -58,7 +58,7 @@ func New() *Metrics {
 	return m
 }
 
-func (m *Metrics) Handler() http.Handler {
+func (m *Metrics) Handler() http.Handler { // This function make registry to HTTP handler, so that we can expose it endpoint
 	return promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{})
 }
 
