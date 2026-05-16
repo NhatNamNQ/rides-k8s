@@ -446,3 +446,61 @@ runtime stage -> runs only the final binary
 ```
 
 That keeps the final image smaller and cleaner than shipping the whole Go toolchain in production-style containers.
+
+## Stage 6: Prometheus Locally
+
+Date: 2026-05-16
+
+### Summary
+
+This stage adds Prometheus as a local monitoring service. The Go API already exposed a `GET /metrics` endpoint in Stage 3, but until now nothing was collecting those metrics over time.
+
+Prometheus is the first tool in the project that regularly scrapes the API and stores metric values so we can query them.
+
+### What Changed
+
+- Added `observability/prometheus/prometheus.yml`.
+- Added a `prometheus` service to `deploy/docker-compose/docker-compose.yml`.
+- Configured Prometheus to scrape:
+  - itself at `prometheus:9090`
+  - the Go API at `api:8080`
+
+### Concepts Learned
+
+- **Prometheus**: a monitoring system that pulls metrics from HTTP endpoints.
+- **Scrape target**: a service Prometheus tries to read metrics from.
+- **`up` metric**: built-in Prometheus metric that shows whether a scrape succeeded.
+- **`prometheus.yml`**: the configuration file that tells Prometheus what to scrape.
+- **Compose service DNS**: inside Docker Compose, `api` and `prometheus` work like hostnames.
+
+### How I Verified It
+
+- Verified the Docker Compose file parses successfully with the Prometheus service added.
+- Checked that the Prometheus config points to `api:8080`, which matches the Compose service name.
+
+The next manual runtime check is:
+
+- `docker compose -f deploy/docker-compose/docker-compose.yml up --build`
+- open `http://localhost:9090`
+- query `up`
+- query `rides_created_total`
+
+### Problems and Fixes
+
+- No new code issue appeared in the Go API because Stage 6 only adds local observability infrastructure.
+- The main beginner pitfall here is using `localhost` as the API target inside Prometheus config. That would be wrong because Prometheus runs in its own container. The correct target is `api:8080`.
+
+### Beginner Notes
+
+Think of Stage 6 like this:
+
+```text
+Before Stage 6:
+The API exposes metrics, but nobody collects them.
+
+After Stage 6:
+The API exposes metrics.
+Prometheus visits /metrics on a schedule and stores what it sees.
+```
+
+That is why Prometheus comes before Grafana. First we need to collect data. Later Grafana will read from Prometheus and turn the numbers into dashboards.

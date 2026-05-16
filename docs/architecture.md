@@ -35,6 +35,14 @@ prometheus -> api /metrics
 grafana -> prometheus
 ```
 
+Current local Compose stack after Stage 6:
+
+```text
+postgres
+api
+prometheus
+```
+
 Later:
 
 ```text
@@ -152,6 +160,12 @@ Responsibilities:
 - scrape `/metrics` from the API
 - scrape `/metrics` from the simulator
 - provide queryable operational metrics
+
+Current local setup:
+
+- runs in Docker Compose
+- scrapes itself at `prometheus:9090`
+- scrapes the API at `api:8080`
 
 Initial metrics:
 
