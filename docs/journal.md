@@ -367,3 +367,82 @@ postgresql://USER:PASSWORD@HOST:6543/postgres?sslmode=require&default_query_exec
 ```
 
 Do not commit the real connection string because it contains the database password.
+
+## Stage 5: Docker Compose
+
+Date: 2026-05-16
+
+### Summary
+
+This stage packages the Go API and PostgreSQL into containers so the system can run in a repeatable local environment.
+
+The main idea is that we no longer depend only on tools installed directly on the laptop. Instead, Docker provides a defined runtime for the API and the database.
+
+### What Changed
+
+- Added `services/api/Dockerfile`.
+- Added `services/api/.dockerignore`.
+- Added `deploy/docker-compose/docker-compose.yml`.
+- Configured a multi-stage Docker build for the Go API.
+- Configured Docker Compose services for:
+  - `api`
+  - `postgres`
+- Configured the API container to use:
+  - `PORT=8080`
+  - `LOG_LEVEL=debug`
+  - `DATABASE_URL=postgres://rides:rides@postgres:5432/rides?sslmode=disable`
+- Mounted `services/api/migrations/001_init.sql` into Postgres auto-init.
+- Added a named Docker volume for Postgres data.
+
+### Concepts Learned
+
+- **Dockerfile**: instructions for building a container image.
+- **Multi-stage build**: use one image to compile the Go binary and another smaller image to run it.
+- **Docker Compose**: runs multiple related containers together.
+- **Service name as hostname**: inside Compose, the API can reach Postgres using `postgres` as the host.
+- **Volume**: keeps Postgres data alive across container restarts.
+- **Container startup dependency**: `depends_on` plus health checks helps the API wait for Postgres.
+- **Auto-init SQL**: Postgres runs SQL files from `/docker-entrypoint-initdb.d/` on first database initialization.
+
+### How I Verified It
+
+- Ran the Go test suite successfully after the Stage 5 changes.
+- Verified the Docker Compose file structure is in place.
+
+Full container runtime verification is still pending if Docker image downloads or builds are slow. The intended next manual check is:
+
+- `docker compose -f deploy/docker-compose/docker-compose.yml up --build`
+- `GET /healthz`
+- `POST /api/rides`
+- restart the stack
+- confirm rides persist through Postgres
+
+### Problems and Fixes
+
+- No application bug was introduced during the Stage 5 file setup.
+- Earlier weak network conditions made large Docker image downloads undesirable, so the stage was prepared with config-first validation.
+
+### Beginner Notes
+
+The important relationship in Compose is:
+
+```text
+api container -> connects to postgres container
+```
+
+Inside Docker Compose, this works:
+
+```text
+postgres://rides:rides@postgres:5432/rides?sslmode=disable
+```
+
+because `postgres` is the service name, and Docker Compose provides internal DNS for service-to-service communication.
+
+The Dockerfile uses two stages:
+
+```text
+builder stage -> compiles the Go binary
+runtime stage -> runs only the final binary
+```
+
+That keeps the final image smaller and cleaner than shipping the whole Go toolchain in production-style containers.

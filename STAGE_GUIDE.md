@@ -336,10 +336,38 @@ Run the app and database in containers.
 
 1. Add `services/api/Dockerfile`.
 
+Recommended shape:
+
+```text
+multi-stage build
+  builder stage -> compile Go binary
+  runtime stage -> small final image
+```
+
 2. Add `deploy/docker-compose/docker-compose.yml` with:
 
 - api
 - postgres
+
+Recommended local `DATABASE_URL` in Compose:
+
+```text
+postgres://rides:rides@postgres:5432/rides?sslmode=disable
+```
+
+Use the Docker Compose service name `postgres` as the hostname.
+
+Let Postgres apply the migration automatically by mounting:
+
+```text
+services/api/migrations/001_init.sql
+```
+
+into:
+
+```text
+/docker-entrypoint-initdb.d/
+```
 
 3. Run:
 
@@ -363,10 +391,13 @@ Focus on:
 - service names as DNS names
 - container logs
 - volumes
+- multi-stage Docker builds
+- why `postgres` works as a hostname inside Docker Compose
 
 ### Checkpoint
 
 The API container connects to the Postgres container.
+Postgres applies `001_init.sql` automatically on first start.
 
 ## Stage 6: Prometheus Locally
 
