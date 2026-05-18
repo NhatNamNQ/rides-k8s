@@ -477,6 +477,8 @@ http://prometheus:9090
 - rides created
 - error rate
 
+5. Provision the Prometheus datasource and dashboard files so Grafana starts with a working setup.
+
 ### Useful PromQL
 
 ```promql
@@ -512,6 +514,8 @@ It should:
 3. Add simulator to Docker Compose.
 
 4. Add simulator target to Prometheus.
+
+5. Add one Grafana panel for simulator behavior so you can see the load source, not only the API effect.
 
 ### Learn
 

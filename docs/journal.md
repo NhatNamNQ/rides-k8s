@@ -504,3 +504,107 @@ Prometheus visits /metrics on a schedule and stores what it sees.
 ```
 
 That is why Prometheus comes before Grafana. First we need to collect data. Later Grafana will read from Prometheus and turn the numbers into dashboards.
+
+## Stage 7: Grafana Locally
+
+Date: 2026-05-16
+
+### Summary
+
+This stage adds Grafana on top of Prometheus so the collected metrics can be viewed as a dashboard instead of only through Prometheus queries. The main learning goal is to understand the difference between collecting metrics and visualizing them.
+
+### What Changed
+
+- Added a Grafana service to `deploy/docker-compose/docker-compose.yml`.
+- Added Grafana provisioning files for:
+  - a Prometheus datasource
+  - a dashboard provider
+- Added a starter dashboard at `observability/grafana/dashboards/rides-overview.json`.
+
+### Concepts Learned
+
+- **Grafana datasource**: the system Grafana reads metrics from.
+- **Provisioning**: automatic setup of datasources and dashboards when Grafana starts.
+- **Dashboard panels**: visual blocks that show one metric or one operational question.
+- **PromQL in Grafana**: the same Prometheus query language, but used inside dashboard panels.
+
+### How I Verified It
+
+- Verified the Compose file now includes Grafana on port `3000`.
+- Verified Grafana is configured to read from Prometheus at `http://prometheus:9090`.
+- Added a dashboard that tracks:
+  - request rate
+  - p95 latency
+  - active rides
+  - rides created
+  - error rate
+
+### Problems and Fixes
+
+- No backend code change was needed.
+- The main beginner trap here is expecting Grafana to collect metrics by itself. It does not. Grafana only visualizes data that Prometheus already collected.
+
+### Beginner Notes
+
+Think of the stack like this:
+
+```text
+Go API -> exposes /metrics
+Prometheus -> collects and stores the metrics
+Grafana -> turns the metrics into charts
+```
+
+This is the point where monitoring starts to feel useful. Prometheus shows that the app is being scraped, but Grafana makes the system easier to read at a glance.
+
+## Stage 8: Simulator
+
+Date: 2026-05-18
+
+### Summary
+
+This stage adds a simple simulator service that continuously creates rides through the Go API. The goal is to generate realistic traffic so Prometheus and Grafana show changing behavior instead of mostly idle metrics.
+
+### What Changed
+
+- Added a new Go service at `services/simulator`.
+- Added a background loop that sends `POST /api/rides` requests to the API.
+- Added simulator metrics and a `GET /metrics` endpoint.
+- Added the simulator to Docker Compose.
+- Added the simulator as a Prometheus scrape target.
+- Added a Grafana panel for simulator create-ride events.
+
+### Concepts Learned
+
+- **Background loop**: a long-running process that performs work on a schedule.
+- **Service-to-service HTTP**: one service calling another by service name inside Docker Compose.
+- **Load generation**: producing traffic automatically instead of clicking endpoints manually.
+- **Simulator metrics**: metrics for the service that creates traffic, not only the service that receives traffic.
+
+### How I Verified It
+
+- Added a simulator unit test for successful ride creation requests.
+- Verified the Grafana dashboard JSON still parses.
+- Updated Prometheus to scrape both the API and the simulator.
+- Updated Docker Compose to run the simulator with `API_BASE_URL=http://api:8080`.
+
+The next runtime check for this stage is:
+
+- `docker compose -f deploy/docker-compose/docker-compose.yml up --build`
+- open `http://localhost:3000`
+- confirm rides are created without manual requests
+- confirm the simulator panel moves in Grafana
+
+### Problems and Fixes
+
+- The simulator needed its own metrics instead of reusing API metrics, otherwise Grafana would only show the effect on the API and not the source of the load.
+- The simulator config needed a separate `LogLevelRaw` field so the parsed log-level helper would not collide with a field name.
+
+### Beginner Notes
+
+Think of the simulator like a robot user:
+
+```text
+simulator -> sends ride requests -> api -> writes data -> Prometheus scrapes both services
+```
+
+This stage matters because a monitoring stack is much easier to understand when something in the system is actually changing on its own.

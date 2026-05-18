@@ -38,9 +38,10 @@ grafana -> prometheus
 Current local Compose stack after Stage 6:
 
 ```text
-postgres
 api
+simulator
 prometheus
+grafana
 ```
 
 Later:
@@ -126,6 +127,12 @@ Responsibilities:
 - create load against the Go API
 - expose simulator metrics
 
+Current local setup:
+
+- runs as its own Go service in Docker Compose
+- calls the API at `http://api:8080`
+- exposes `/metrics` for Prometheus scraping at `simulator:8081`
+
 The simulator can start in Go for simplicity. Node.js can be introduced later if practicing Node is still a goal.
 
 ## PostgreSQL
@@ -203,6 +210,12 @@ First dashboard panels:
 - active rides
 - rides created
 - error rate
+
+Current local setup:
+
+- runs in Docker Compose
+- reads from Prometheus at `http://prometheus:9090`
+- loads a provisioned dashboard on startup
 
 ## React Frontend
 
