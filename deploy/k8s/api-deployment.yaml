@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rides-api
+  labels:
+    app: rides-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rides-api
+  template:
+    metadata:
+      labels:
+        app: rides-api
+    spec:
+      containers:
+        - name: api
+          image: rides-api:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: rides-api-config
+            - secretRef:
+                name: rides-api-secrets
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3

@@ -44,6 +44,12 @@ prometheus
 grafana
 ```
 
+Current Minikube stack for Stage 9:
+
+```text
+rides-api Deployment -> rides-api Service -> external Supabase Postgres
+```
+
 Later:
 
 ```text
@@ -216,6 +222,37 @@ Current local setup:
 - runs in Docker Compose
 - reads from Prometheus at `http://prometheus:9090`
 - loads a provisioned dashboard on startup
+
+## Kubernetes
+
+Path:
+
+```text
+deploy/k8s
+```
+
+Stage 9 responsibilities:
+
+- deploy the API to Minikube with a Deployment
+- expose the API inside the cluster with a Service
+- provide non-secret config with a ConfigMap
+- provide the Supabase connection string with a Secret
+
+Current Stage 9 Minikube setup:
+
+- deploys only the API to Minikube
+- keeps PostgreSQL outside the cluster in Supabase
+- uses the image tag `rides-api:dev`
+- keeps probe configuration for the next stage
+
+Current Stage 10 health-check setup:
+
+- liveness probe uses `GET /healthz`
+- readiness probe uses `GET /readyz`
+- readiness depends on database connectivity through the existing store ping
+- Kubernetes should restart the Pod only when process health fails, not when the database is temporarily unavailable
+
+This is intentionally smaller than the original in-cluster Postgres version from the stage guide. The current repository already uses Supabase for PostgreSQL, so the first Kubernetes step focuses on learning Deployments, Services, ConfigMaps, and Secrets without changing database strategy again.
 
 ## React Frontend
 

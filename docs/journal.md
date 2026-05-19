@@ -608,3 +608,121 @@ simulator -> sends ride requests -> api -> writes data -> Prometheus scrapes bot
 ```
 
 This stage matters because a monitoring stack is much easier to understand when something in the system is actually changing on its own.
+
+## Stage 9: Kubernetes Deployment with Minikube
+
+Date: 2026-05-18
+
+### Summary
+
+This stage prepares the first Kubernetes deployment for the API. Instead of moving PostgreSQL into the cluster, this version keeps the existing Supabase database and focuses the Kubernetes work on the API itself.
+
+That keeps the first Minikube step smaller. The learning goal is to understand the basic Kubernetes objects needed to run the API: a Deployment, a Service, a ConfigMap, and a Secret.
+
+### What Changed
+
+- Added `deploy/k8s/configmap.yaml` for non-secret API settings.
+- Added `deploy/k8s/secret.yaml` for `DATABASE_URL`.
+- Added `deploy/k8s/api-deployment.yaml` for the `rides-api` Deployment.
+- Added `deploy/k8s/api-service.yaml` for the in-cluster API Service.
+- Updated `docs/architecture.md` to describe the Stage 9 Minikube setup.
+
+### Concepts Learned
+
+- **Deployment**: tells Kubernetes how many API Pods to run and which container image to use.
+- **Service**: gives the API a stable in-cluster name even if Pods are replaced.
+- **ConfigMap**: stores non-secret environment variables such as `PORT` and `LOG_LEVEL`.
+- **Secret**: stores sensitive values such as the database connection string.
+- **External database from Kubernetes**: the app can run in Minikube while still talking to a managed database outside the cluster.
+
+### How I Verified It
+
+- Reviewed the API config code to confirm it reads `PORT`, `LOG_LEVEL`, and `DATABASE_URL`.
+- Matched the Kubernetes image tag to the Stage Guide build flow: `rides-api:dev`.
+- Checked that the Service selector matches the Deployment Pod labels.
+- Confirmed the manifest set stays scoped to the API only, leaving probes for Stage 10.
+
+Manual runtime verification is still required for this stage:
+
+- `minikube start`
+- `eval $(minikube docker-env)`
+- `docker build -t rides-api:dev services/api`
+- `kubectl apply -f deploy/k8s`
+- `kubectl get pods`
+- `kubectl get svc`
+- `kubectl port-forward svc/rides-api 8080:8080`
+- `curl localhost:8080/healthz`
+
+### Problems and Fixes
+
+- Problem: the original Stage 9 guide assumes PostgreSQL also runs inside Kubernetes.
+- Fix: for this repository, Stage 9 uses the existing Supabase database so the first Minikube deployment can stay focused on core Kubernetes objects.
+
+### Beginner Notes
+
+Think of this stage like this:
+
+```text
+Docker image already exists
+Kubernetes decides how to run it
+ConfigMap gives normal settings
+Secret gives the database URL
+Service gives the Pod a stable network name
+```
+
+This is the first point where the API stops being only a local process or a Docker Compose container and starts being a Kubernetes workload.
+
+## Stage 10: Kubernetes Health Checks
+
+Date: 2026-05-19
+
+### Summary
+
+This stage teaches Kubernetes how to judge whether the API process is alive and whether it is actually ready to receive traffic. The key idea is that those are not the same thing.
+
+### What Changed
+
+- Updated `deploy/k8s/api-deployment.yaml` to add a liveness probe.
+- Updated `deploy/k8s/api-deployment.yaml` to add a readiness probe.
+- Named the API container port `http` so the probes can reference it clearly.
+- Updated `docs/architecture.md` to describe the Stage 10 probe behavior.
+- Updated `STAGE_GUIDE.md` with a repository-specific readiness failure exercise.
+
+### Concepts Learned
+
+- **Liveness probe**: asks whether the process is still healthy enough to keep running.
+- **Readiness probe**: asks whether the app should receive traffic right now.
+- **Probe path choice**: `/healthz` should stay lightweight, while `/readyz` can check important dependencies like PostgreSQL.
+- **Restart loop risk**: if a readiness-style dependency check is put into liveness, Kubernetes may keep restarting a healthy process for the wrong reason.
+
+### How I Verified It
+
+- Reviewed the Go API handlers to confirm `/healthz` returns process health and `/readyz` checks `store.Ping(...)`.
+- Validated that the Deployment now points liveness to `/healthz` and readiness to `/readyz`.
+- Kept the probe setup scoped to the existing Supabase-based Kubernetes layout rather than introducing an in-cluster database.
+
+Manual runtime verification for this stage:
+
+- `kubectl apply -f deploy/k8s`
+- `kubectl describe pod <pod-name>`
+- `kubectl port-forward svc/rides-api 8080:8080`
+- `curl localhost:8080/healthz`
+- `curl localhost:8080/readyz`
+- temporarily break `DATABASE_URL` in `deploy/k8s/secret.yaml`
+- re-apply and observe readiness fail without the container being killed for liveness
+
+### Problems and Fixes
+
+- Problem: Kubernetes needs different answers for “is the process alive?” and “can this Pod receive traffic?”
+- Fix: point liveness to `/healthz` and readiness to `/readyz` so database issues affect traffic routing, not unnecessary restarts.
+
+### Beginner Notes
+
+Think of it like this:
+
+```text
+/healthz -> "Is the app process still alive?"
+/readyz  -> "Is the app ready to serve real requests right now?"
+```
+
+If Supabase has a temporary problem, the API process may still be running. In that case, Kubernetes should usually stop sending it traffic, not immediately restart it.

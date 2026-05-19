@@ -629,6 +629,8 @@ kubectl describe pod <pod-name>
 
 4. Break database config temporarily and observe readiness failure.
 
+For this repository, that usually means changing the `DATABASE_URL` in `deploy/k8s/secret.yaml` to an invalid value, re-applying it, and watching `/readyz` fail while `/healthz` stays healthy.
+
 ### Learn
 
 Focus on:
