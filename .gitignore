@@ -50,4 +50,4 @@ dist/
 build/
 .next/
 coverage/
-
+.claude/
