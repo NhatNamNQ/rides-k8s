@@ -252,6 +252,15 @@ Current Stage 10 health-check setup:
 - readiness depends on database connectivity through the existing store ping
 - Kubernetes should restart the Pod only when process health fails, not when the database is temporarily unavailable
 
+Current Stage 11 monitoring setup:
+
+- Prometheus runs inside Minikube as its own Deployment and Service
+- Prometheus scrapes `rides-api:8080/metrics` from inside the cluster
+- Grafana runs inside Minikube as its own Deployment and Service
+- Grafana is provisioned from ConfigMaps for:
+  - Prometheus datasource
+  - API-only starter dashboard
+
 This is intentionally smaller than the original in-cluster Postgres version from the stage guide. The current repository already uses Supabase for PostgreSQL, so the first Kubernetes step focuses on learning Deployments, Services, ConfigMaps, and Secrets without changing database strategy again.
 
 ## React Frontend

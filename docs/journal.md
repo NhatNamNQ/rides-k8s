@@ -726,3 +726,63 @@ Think of it like this:
 ```
 
 If Supabase has a temporary problem, the API process may still be running. In that case, Kubernetes should usually stop sending it traffic, not immediately restart it.
+
+## Stage 11: Prometheus and Grafana in Minikube
+
+Date: 2026-05-20
+
+### Summary
+
+This stage moves monitoring into Minikube so Prometheus and Grafana run inside the cluster instead of only in Docker Compose. The first pass stays deliberately small: monitor the API from inside Kubernetes and leave the simulator out of the cluster for now.
+
+### What Changed
+
+- Added `deploy/k8s/prometheus-configmap.yaml` with a simple in-cluster Prometheus config.
+- Added `deploy/k8s/prometheus-deployment.yaml` and `deploy/k8s/prometheus-service.yaml`.
+- Added `deploy/k8s/grafana-datasource-configmap.yaml` for datasource and dashboard-provider provisioning.
+- Added `deploy/k8s/grafana-dashboard-configmap.yaml` with an API-only starter dashboard.
+- Added `deploy/k8s/grafana-deployment.yaml` and `deploy/k8s/grafana-service.yaml`.
+- Updated `docs/architecture.md` and `STAGE_GUIDE.md` to reflect the API-first in-cluster monitoring path.
+
+### Concepts Learned
+
+- **Monitoring inside Kubernetes**: Prometheus can scrape Services from inside the cluster, not only containers in Docker Compose.
+- **ClusterIP Service**: Prometheus and Grafana do not need public access inside Minikube; they can be reached by service name.
+- **Grafana provisioning from ConfigMaps**: dashboards and datasources can be created automatically at pod startup.
+- **API-only scope**: keeping the first cluster-monitoring step narrow makes it easier to debug the stack.
+
+### How I Verified It
+
+- Reused the Prometheus and Grafana local configuration patterns and adapted them to Kubernetes service names.
+- Kept the in-cluster Prometheus scrape target scoped to `rides-api:8080/metrics`.
+- Built the Grafana dashboard to query only `job="rides-api"` metrics so it matches the Stage 11 scope.
+- Parsed the dashboard JSON successfully before embedding it into the ConfigMap.
+
+Manual runtime verification for this stage:
+
+- `kubectl apply -f deploy/k8s`
+- `kubectl get pods`
+- `kubectl get svc`
+- `kubectl logs deploy/prometheus`
+- `kubectl logs deploy/grafana`
+- `kubectl port-forward svc/grafana 3000:3000`
+- open `http://localhost:3000`
+- generate API traffic and confirm the dashboard moves
+
+### Problems and Fixes
+
+- Problem: the local Grafana dashboard included simulator panels, but the simulator is not in Minikube yet.
+- Fix: the in-cluster dashboard is API-only and filters queries with `job="rides-api"`.
+
+### Beginner Notes
+
+Think of this stage like this:
+
+```text
+rides-api runs in Minikube
+Prometheus runs in Minikube and scrapes rides-api
+Grafana runs in Minikube and reads from Prometheus
+your browser reaches Grafana through kubectl port-forward
+```
+
+This stage is where monitoring becomes part of the cluster itself, not just an external local tool.

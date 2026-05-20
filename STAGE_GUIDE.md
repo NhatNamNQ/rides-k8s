@@ -653,6 +653,8 @@ Run monitoring inside Kubernetes.
 
 1. Deploy Prometheus with a simple config first.
 
+For this repository, Stage 11 is API-only in the cluster. The simulator stays out of Minikube for now, so Prometheus should scrape `rides-api:8080/metrics`.
+
 2. Deploy Grafana.
 
 3. Port-forward Grafana:
@@ -661,7 +663,7 @@ Run monitoring inside Kubernetes.
 kubectl port-forward svc/grafana 3000:3000
 ```
 
-4. Add dashboards for API and simulator.
+4. Add dashboards for the API first.
 
 ### Later Option
 
