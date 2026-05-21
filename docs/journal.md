@@ -786,3 +786,85 @@ your browser reaches Grafana through kubectl port-forward
 ```
 
 This stage is where monitoring becomes part of the cluster itself, not just an external local tool.
+
+## Stage 11.5: Helm for Monitoring
+
+Date: 2026-05-21
+
+### Summary
+
+This mini-stage repeats the monitoring setup with Helm so the same Prometheus and Grafana ideas can be managed as chart releases instead of only raw Kubernetes YAML.
+
+The goal was not to replace the earlier learning work. The goal was to compare two deployment styles:
+
+- raw manifests in `deploy/k8s`
+- Helm values in `deploy/helm/monitoring`
+
+### What Changed
+
+- Added `deploy/helm/monitoring/prometheus-values.yaml`.
+- Added `deploy/helm/monitoring/grafana-values.yaml`.
+- Configured the Prometheus Helm chart to scrape `rides-api.default.svc.cluster.local:8080/metrics`.
+- Configured the Grafana Helm chart to provision Prometheus as the default datasource.
+- Added dashboard provisioning in Helm values so Grafana loads a `Rides Overview` dashboard automatically.
+- Aligned the Grafana datasource UID with the dashboard JSON so the dashboard panels know which datasource to use.
+
+### Concepts Learned
+
+- **Helm repo**: an online source of Helm charts. It is similar to an app store for Kubernetes packages.
+- **Helm chart**: a reusable Kubernetes application template that creates objects like Deployments, Services, Secrets, and ConfigMaps.
+- **Helm release**: one installed instance of a chart in a namespace.
+- **Values file**: a YAML file that changes chart behavior without rewriting the chart itself.
+- **Provisioned datasource**: Grafana can create the Prometheus connection automatically when the pod starts.
+- **Provisioned dashboard**: Grafana can load a dashboard from configuration instead of requiring manual UI setup every time.
+- **Service DNS in Kubernetes**: Prometheus can scrape another service by cluster DNS name such as `rides-api.default.svc.cluster.local`.
+
+### How I Verified It
+
+- Confirmed the Helm CLI worked with `helm version`.
+- Added and updated the Prometheus and Grafana chart repositories.
+- Installed Prometheus and Grafana into the `monitoring` namespace with Helm.
+- Validated `deploy/helm/monitoring/grafana-values.yaml` as YAML.
+- Rendered the Grafana chart with `helm template` to confirm the values file was accepted.
+- Verified Grafana could be opened with `kubectl port-forward -n monitoring svc/grafana 3000:80`.
+- Verified the Helm values now define:
+  - a Prometheus datasource
+  - a dashboard provider
+  - a `Rides Overview` dashboard for API metrics
+
+Manual runtime verification for this stage:
+
+- `helm list -n monitoring`
+- `helm status grafana -n monitoring`
+- `helm upgrade prometheus prometheus-community/prometheus -n monitoring -f deploy/helm/monitoring/prometheus-values.yaml`
+- `helm upgrade grafana grafana/grafana -n monitoring -f deploy/helm/monitoring/grafana-values.yaml`
+- `kubectl port-forward -n monitoring svc/prometheus-server 9090:80`
+- `kubectl port-forward -n monitoring svc/grafana 3000:80`
+- query `up{job="rides-api"}` in Prometheus
+- query `http_requests_total{job="rides-api"}` in Prometheus
+- open Grafana and confirm the dashboard appears
+
+### Problems and Fixes
+
+- Problem: Homebrew failed while trying to build Helm because the machine ran out of local build space.
+- Fix: installed Helm manually from the official binary release instead of depending on the Homebrew build.
+- Problem: Grafana initially showed an empty dashboard page.
+- Fix: the Helm values only provisioned a datasource at first, so dashboard provisioning was added explicitly.
+- Problem: the dashboard JSON expected datasource UID `prometheus`, but the Grafana datasource definition did not set a UID.
+- Fix: added `uid: prometheus` to the datasource config so the dashboard panels can bind to the correct datasource.
+- Problem: Minikube became unhealthy during Helm setup because the local Docker-backed cluster stopped responding.
+- Fix: restarted the Minikube container and continued after the cluster became reachable again.
+
+### Beginner Notes
+
+Think of this stage like this:
+
+```text
+raw YAML = I write each Kubernetes object myself
+Helm = the chart writes the Kubernetes objects for me
+values.yaml = I control the chart without changing the chart source
+```
+
+Helm does not replace Kubernetes knowledge. It sits on top of Kubernetes. If a Grafana chart creates a Deployment, Service, Secret, and ConfigMap, those are still normal Kubernetes objects underneath.
+
+This is why it helped to do Stage 11 manually first. After the manual version made sense, the Helm version became much easier to understand.

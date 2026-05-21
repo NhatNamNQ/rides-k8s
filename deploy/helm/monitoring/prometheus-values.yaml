@@ -1,0 +1,12 @@
+# Custom values for Prometheus Helm Chart
+# This file overrides default settings without rewriting the Kubernetes manifests.
+
+extraScrapeConfigs: |
+  - job_name: 'rides-api'
+    metrics_path: '/metrics'
+    static_configs:
+      # Scrape the Go API service running in the 'default' namespace.
+      # Because Prometheus runs in the 'monitoring' namespace, we must use the
+      # fully qualified domain name (FQDN) for the service:
+      # <service-name>.<namespace>.svc.cluster.local:<port>
+      - targets: ['rides-api.default.svc.cluster.local:8080']
